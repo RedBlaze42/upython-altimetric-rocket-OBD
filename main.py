@@ -1,7 +1,7 @@
 import machine, neopixel, bmp280, time
 import _thread
 from machine import Pin, I2C, Timer
-from micropython import const
+from micropython import const, schedule
 from collections import deque
 import rp2
 
@@ -86,6 +86,7 @@ def get_bmp_data():
     global bmp_last_measure_ticks, sea_level_pressure
     time.sleep_ms(max(0, 1 + bmp_refresh_period-(time.ticks_ms()-bmp_last_measure_ticks))) # Ensure "bmp_refresh_period" is waited between measurements
 
+    tries = 0
     while True:
         bmp_last_measure_ticks = time.ticks_ms()
         pressure, temperature = bmp.pressure, bmp.temperature
@@ -93,6 +94,10 @@ def get_bmp_data():
             break
         else:
             time.sleep(bmp_refresh_period)
+        
+        if tries == 0:
+            log_buffer.append(f"{time.ticks_ms()}|e|Bmp returned value of {pressure}, retrying...")
+            tries += 1
     
     if sea_level_pressure == 0: sea_level_pressure = pressure # Set reference pressure
     
@@ -105,14 +110,14 @@ def deploy():
         servo.duty_ns(servo_open)
         status = STATUS_DEPLOYED
         ticks_deployed = time.ticks_ms()
-        log_buffer.append(f"{ticks_deployed}|{FRAME_LOG}|DEPLOYED\n")
+        schedule(log_buffer.append; f"{ticks_deployed}|{FRAME_LOG}|DEPLOYED\n")
         write_color(COLOR_WHITE)
     else:
-        log_buffer.append(f"{time.ticks_ms()}|{FRAME_LOG}|INVALID DEPLOY ORDER")
+        schedule(log_buffer.append, f"{time.ticks_ms()}|{FRAME_LOG}|INVALID DEPLOY ORDER")
         
 def deploy_callback(t):
     deploy()
-    log_buffer.append(f"{time.ticks_ms()}|{FRAME_LOG}|DEPLOYED BY TIMER")
+    schedule(log_buffer.append, f"{time.ticks_ms()}|{FRAME_LOG}|DEPLOYED BY TIMER")
     
 def avg_speed(altitude_buffer):
     speeds = list()
