@@ -5,15 +5,17 @@ from micropython import const, schedule
 from collections import deque
 import rp2
 
-servo_open = const(1_000_000)
-servo_closed = const(1_800_000)
+servo_open = const(800_000)
+servo_closed = const(1_850_000)
 
-optimal_delay = const(8222)
+optimal_delay = const(9000)
 
 altitude_treshold = const(15) # for launch detection in m
 speed_treshold = const(3) # m/s
-min_delay = const(3500)
+min_delay = const(1000)
 max_delay = const(optimal_delay+1000)
+
+max_alt = const(300) # Force deployment at this altitude
 
 # Colors
 COLOR_RED = const((255, 0, 0)) # STANDBY blink
@@ -43,11 +45,11 @@ timeout = const(10_000)
 
 led = neopixel.NeoPixel(Pin(16), 1)
 
-bmp = bmp280.BMP280(I2C(0, sda=Pin(0), scl=Pin(1)), use_case=bmp280.BMP280_CASE_HANDHELD_DYN)
+bmp = bmp280.BMP280(I2C(0, sda=Pin(4), scl=Pin(5)), use_case=bmp280.BMP280_CASE_HANDHELD_DYN)
 bmp_refresh_period = const(13)
 bmp_last_measure_ticks = 0
 
-servo = machine.PWM(Pin(2))
+servo = machine.PWM(Pin(11))
 servo.freq(50)
 servo.duty_ns(servo_closed)
 
@@ -86,18 +88,18 @@ def get_bmp_data():
     global bmp_last_measure_ticks, sea_level_pressure
     time.sleep_ms(max(0, 1 + bmp_refresh_period-(time.ticks_ms()-bmp_last_measure_ticks))) # Ensure "bmp_refresh_period" is waited between measurements
 
-    tries = 0
     while True:
         bmp_last_measure_ticks = time.ticks_ms()
-        pressure, temperature = bmp.pressure, bmp.temperature
+        try:
+            pressure, temperature = bmp.pressure, bmp.temperature
+        except OSError:
+            time.sleep_ms(bmp_refresh_period)
+            continue
+        
         if pressure > 71300: # Workaround first measurement glitch
             break
         else:
-            time.sleep(bmp_refresh_period)
-        
-        if tries == 0:
-            log_buffer.append(f"{time.ticks_ms()}|e|Bmp returned value of {pressure}, retrying...")
-            tries += 1
+            time.sleep_ms(bmp_refresh_period)
     
     if sea_level_pressure == 0: sea_level_pressure = pressure # Set reference pressure
     
@@ -130,7 +132,9 @@ _thread.start_new_thread(flush_logs, (log_buffer,))
 
 # FORCE DEPLOYEMENT
 write_color(COLOR_GREEN)
+
 time.sleep(2)
+
 if rp2.bootsel_button():
     servo.duty_ns(servo_open)
     log_buffer.append(f"{time.ticks_ms()}|{FRAME_LOG}|FORCED DEPLOYMENT")
@@ -185,6 +189,11 @@ while status == STATUS_LAUNCHED: # While LAUNCHED not DEPLOYED
     
     log_buffer.append((timestamp, FRAME_BMP, altitude, pressure, temperature))
     
+    if altitude > max_alt:
+        deploy()
+        log_buffer.append(f"{timestamp}|{FRAME_LOG}|FORCED DEPLOYMENT")
+        
+    
     if len(altitude_buffer) > 2:
         speed = avg_speed(altitude_buffer)
         log_buffer.append(f"{timestamp}|{FRAME_SPEED}|{speed}")
@@ -199,3 +208,4 @@ while status == STATUS_DEPLOYED or time.ticks_ms()-ticks_touchdown < timeout: # 
         status = STATUS_TOUCHDOWN
         ticks_touchdown = time.ticks_ms()
         log_buffer.append(f"{timestamp}|{FRAME_LOG}|TOUCHDOWN")
+
