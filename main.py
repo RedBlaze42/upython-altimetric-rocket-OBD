@@ -112,7 +112,7 @@ def deploy():
         servo.duty_ns(servo_open)
         status = STATUS_DEPLOYED
         ticks_deployed = time.ticks_ms()
-        schedule(log_buffer.append; f"{ticks_deployed}|{FRAME_LOG}|DEPLOYED\n")
+        schedule(log_buffer.append, f"{ticks_deployed}|{FRAME_LOG}|DEPLOYED\n")
         write_color(COLOR_WHITE)
     else:
         schedule(log_buffer.append, f"{time.ticks_ms()}|{FRAME_LOG}|INVALID DEPLOY ORDER")
