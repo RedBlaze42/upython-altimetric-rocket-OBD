@@ -5,7 +5,7 @@ from micropython import const, schedule
 from collections import deque
 import rp2
 
-servo_open = const(800_000)
+servo_open = const(900_000)
 servo_closed = const(1_850_000)
 
 optimal_delay = const(9000)
@@ -45,11 +45,14 @@ timeout = const(10_000)
 
 led = neopixel.NeoPixel(Pin(16), 1)
 
+buzz = Pin(7, Pin.OUT)
+buzz.off()
+
 bmp = bmp280.BMP280(I2C(0, sda=Pin(4), scl=Pin(5)), use_case=bmp280.BMP280_CASE_HANDHELD_DYN)
 bmp_refresh_period = const(13)
 bmp_last_measure_ticks = 0
 
-servo = machine.PWM(Pin(11))
+servo = machine.PWM(Pin(13))
 servo.freq(50)
 servo.duty_ns(servo_closed)
 
@@ -81,7 +84,11 @@ def flush_logs(buffer):
 def write_color(color):
     led[0] = color
     led.write()
-    
+
+buzz.on()
+time.sleep(0.1)
+buzz.off()
+
 bmp_last_measure_ticks = 0
 sea_level_pressure = 0
 def get_bmp_data():
@@ -168,8 +175,15 @@ while status == STATUS_STANDBY: # While waiting for LAUNCH
         write_color(COLOR_GREEN)
     else:
         write_color(COLOR_RED)
+        
+    if (time.ticks_ms()%1_000) < 100:
+        buzz.on()
+    else:
+        buzz.off()
 
+buzz.off()
 write_color(COLOR_BLUE)
+
 while True: 
     try:
         log_buffer.append(measure_buffer.popleft()) # Log circular buffer
@@ -209,3 +223,9 @@ while status == STATUS_DEPLOYED or time.ticks_ms()-ticks_touchdown < timeout: # 
         ticks_touchdown = time.ticks_ms()
         log_buffer.append(f"{timestamp}|{FRAME_LOG}|TOUCHDOWN")
 
+while True:
+    buzz.on()
+    time.sleep(0.1)
+    buzz.off()
+    time.sleep(0.4)
+    
